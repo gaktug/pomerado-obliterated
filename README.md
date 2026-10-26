@@ -18,7 +18,7 @@ npx -y -p playwright@1.63.0 playwright install chromium
 pomerado-obliterated-mcp --help
 ```
 
-The first command builds this fork from Git source; it does not fetch an upstream npm release. To freeze an installation, replace `#main` with a tested commit SHA. Install the matching Playwright Chromium using the second command. If Linux reports missing browser libraries, run `npx -y -p playwright@1.63.0 playwright install --with-deps chromium` (requires sudo). If a browser download is blocked, the tool is **not** fully installed; do not silently substitute another Chromium revision. Client applications may need an absolute executable path: find it with `command -v pomerado-obliterated-mcp`.
+The first command builds this fork from Git source; it does not fetch an upstream npm release. To freeze an installation, replace `#main` with a tested commit SHA. If npm's script-approval feature blocks the build (npm warns about `install-scripts`, or the `pomerado-obliterated-mcp` command is missing afterwards), rerun the install with `--foreground-scripts` and approve this package's scripts, or build from a clone with `npm install && npm run build && npm link`. Install the matching Playwright Chromium using the second command. If Linux reports missing browser libraries, run `npx -y -p playwright@1.63.0 playwright install --with-deps chromium` (requires sudo). If a browser download is blocked, the tool is **not** fully installed; do not silently substitute another Chromium revision. Client applications may need an absolute executable path: find it with `command -v pomerado-obliterated-mcp`.
 
 ## Choose a model provider
 
