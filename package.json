@@ -1024,6 +1024,7 @@
     "mcp": "node dist/typescript/src/standalone/mcp-cli.js",
     "test": "node tools/check-host-protocol.ts && vitest run",
     "test:browser": "playwright test",
+    "prepare": "npm run build",
     "prepack": "npm run build"
   },
   "dependencies": {
