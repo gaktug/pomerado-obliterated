@@ -42,6 +42,28 @@ Pomerado is a standard MCP stdio server.
 - The server needs `OPENAI_API_KEY` in its environment. Many clients pass servers only a short list of variables, so check your client below.
 - Starting the server and listing its tools launches no browser and calls no model.
 
+## Another model provider
+
+Minting, Guardian reviews and write-outcome reviews can run on any OpenAI-compatible endpoint instead of OpenAI, such as Z.ai GLM or OpenRouter. The switch is opt-in and environment-driven: with none of the variables below set, Pomerado calls OpenAI exactly as before, with `OPENAI_API_KEY` and the built-in models, and nothing changes.
+
+- `POMERADO_MODEL_BASE_URL` — the endpoint's base URL, such as `https://open.bigmodel.cn/api/paas/v4` or `https://openrouter.ai/api/v1`. Setting it opts in.
+- `POMERADO_MODEL_API_KEY_ENV` — the name of the environment variable that holds the endpoint's API key, such as `GLM_API_KEY` or `OPENROUTER_API_KEY`. It names the variable; it never holds a key value itself, and neither do the Pomerado configuration, logs or errors.
+- `POMERADO_MODEL_PROTOCOL` — `chat_completions` (the default) or `responses`. Chat Completions is the broadly compatible protocol: requests leave out OpenAI-specific prompt-cache options and diagnostics, encrypted reasoning and reasoning-effort context, while the conversation stays stateless and tool calls stay intact. Choose `responses` only for an endpoint that truly implements the Responses API.
+- `POMERADO_MINTER_MODEL`, `POMERADO_GUARDIAN_MODEL`, `POMERADO_OUTCOME_REVIEWER_MODEL` — each role's model ID, set independently. A role without one keeps the model ID the runtime names, which suits providers that proxy OpenAI models.
+
+For example, with Z.ai GLM for everything:
+
+```sh
+export POMERADO_MODEL_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+export POMERADO_MODEL_API_KEY_ENV=GLM_API_KEY
+export GLM_API_KEY=...   # your key, read only by the provider client
+export POMERADO_MINTER_MODEL=glm-4.7
+export POMERADO_GUARDIAN_MODEL=glm-4.7-air
+export POMERADO_OUTCOME_REVIEWER_MODEL=glm-4.7-air
+```
+
+A provider that refuses a request fails the mint or review with the provider's error; Pomerado never answers a refused call as if it succeeded. In Chat Completions mode, two Responses-only optimizations do not apply: provider prompt caching (including instruction prewarms, which are skipped without a call) and provider-side context compaction, so a conversation that outgrows the model's context window fails rather than compacting. A custom provider with the same protocol needs no code and works through every client above, with its key variable forwarded the same way `OPENAI_API_KEY` is.
+
 ## Client settings
 
 Each entry says how to add Pomerado, how the key reaches the server, and which timeouts apply. "Verified" means we added Pomerado with that client and saw the server connect. "From the docs" means the entry follows the client's own documentation. Each entry links the docs it follows.

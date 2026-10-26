@@ -23,6 +23,8 @@ Options
   --timeout-seconds N      Session budget (default 1200)
 
 Set OPENAI_API_KEY before minting. A run makes no model request and needs no key.
+To mint through another OpenAI-compatible provider, set POMERADO_MODEL_BASE_URL,
+POMERADO_MODEL_API_KEY_ENV and the role model variables; see docs/getting-started.md.
 A run ignores --intent and --effect. Questions are asked in this terminal.
 `;
 

@@ -409,5 +409,6 @@ The package has these entry points.
 | `typescript/src/execution/` | Local workspaces, child processes and native Playwright adapter |
 | `typescript/src/standalone/` | Local library, terminal and MCP composition |
 | `typescript/src/hosted-features.ts` | Features another host supplies that the local minter ignores and its Guardian doesn't count on |
+| `typescript/src/models/` | Model settings shared by the runtime agents, and the opt-in configuration for another OpenAI-compatible provider |
 | `typescript/src/mcp/schema.ts` | Pure schema adapter shared with the production MCP |
 | `typescript/authoring/` | Shared prompts and examples, with sections a host can replace |
