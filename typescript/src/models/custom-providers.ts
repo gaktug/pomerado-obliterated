@@ -8,6 +8,7 @@ import type {
   ModelResponse,
   ModelSettings,
 } from "@openai/agents";
+import { modelWithOverrides } from "./model-wrap.js";
 
 /**
  * An opt-in provider for an OpenAI-compatible endpoint other than OpenAI's own, such as Z.ai GLM
@@ -40,11 +41,41 @@ export type ModelProviderSetup =
 const protocols: readonly ModelProtocol[] = ["chat_completions", "responses"];
 
 /**
+ * Whether an HTTP base URL stays on this host: the loopback names only, where plaintext cannot
+ * leak the endpoint key onto a network. Everything else needs HTTPS.
+ */
+const loopbackHost = (hostname: string): boolean =>
+  hostname === "localhost" ||
+  hostname.endsWith(".localhost") ||
+  hostname === "::1" ||
+  hostname === "[::1]" ||
+  /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/u.test(hostname);
+
+/** The endpoint's base URL, or the reason it cannot be one. */
+const validatedBaseURL = (baseURL: string): string | { readonly reason: string } => {
+  let url: URL;
+  try {
+    url = new URL(baseURL);
+  } catch {
+    return {
+      reason: `POMERADO_MODEL_BASE_URL must be an absolute https URL, not ${baseURL}.`,
+    };
+  }
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopbackHost(url.hostname)))
+    return {
+      reason: `POMERADO_MODEL_BASE_URL must use https for ${url.hostname}; plaintext http is allowed only on the loopback host.`,
+    };
+  return baseURL;
+};
+
+/**
  * Reads the custom provider configuration from an environment. `POMERADO_MODEL_BASE_URL` opts in;
  * `POMERADO_MODEL_API_KEY_ENV` then names the variable holding the key (never the key itself), so
  * no key value reaches configuration, logs or errors. `POMERADO_MODEL_PROTOCOL` selects the wire
  * protocol and defaults to `chat_completions`, the protocol compatible endpoints broadly accept;
  * `responses` keeps OpenAI-specific settings for endpoints that truly implement the Responses API.
+ * The base URL must be https, or http on the loopback host only, so the endpoint key never
+ * travels in plaintext off this host.
  */
 export const modelProviderSetup = (
   env: Readonly<Record<string, string | undefined>>,
@@ -71,10 +102,16 @@ export const modelProviderSetup = (
       provider: "invalid",
       reason: `POMERADO_MODEL_PROTOCOL must be chat_completions or responses, not ${named}.`,
     };
+  const checked = validatedBaseURL(baseURL);
+  if (typeof checked !== "string")
+    return {
+      provider: "invalid",
+      reason: checked.reason,
+    };
   return {
     provider: "custom",
     config: {
-      baseURL,
+      baseURL: checked,
       apiKeyEnv,
       protocol: protocol as ModelProtocol,
       ...(env["POMERADO_MINTER_MODEL"] === undefined || env["POMERADO_MINTER_MODEL"] === ""
@@ -133,8 +170,16 @@ const allowedTools = (
   tools: readonly unknown[],
   requestTools: ReadonlyArray<NonNullable<ModelRequest["tools"]>[number]>,
 ) => {
-  const admitted = new Set(
-    tools.flatMap((reference) => {
+  const admitted = admittedToolNames(tools);
+  return requestTools.filter((tool) =>
+    restrictionNames(tool).some((name) => admitted.has(name)),
+  );
+};
+
+/** The names an `allowed_tools` restriction's References admit, in `restrictionNames`'s terms. */
+const admittedToolNames = (tools: readonly unknown[]): ReadonlySet<string> =>
+  new Set(
+    (tools as readonly unknown[]).flatMap((reference) => {
       if (typeof reference !== "object" || reference === null) return [];
       const type: unknown = Reflect.get(reference, "type");
       const name: unknown = Reflect.get(reference, "name");
@@ -145,10 +190,37 @@ const allowedTools = (
           : [];
     }),
   );
-  return requestTools.filter((tool) =>
-    restrictionNames(tool).some((name) => admitted.has(name)),
-  );
-};
+
+/** The output item types that ask the host to run something. */
+const toolCallTypes = new Set([
+  "function_call",
+  "custom_tool_call",
+  "apply_patch_call",
+  "hosted_tool_call",
+  "local_shell_call",
+]);
+
+/**
+ * A response whose calls the request's `allowed_tools` restriction admits. Chat Completions has
+ * no server-side enforcement of the restriction — the endpoint may return any tool name it has
+ * ever seen, and the runner resolves returned calls against every tool the agent carries, not
+ * only those this request sent — so the calls the restriction does not admit are dropped here,
+ * before the runner can run them. Text, reasoning and admitted calls pass through; so does
+ * usage. On the Responses protocol the provider itself enforces the restriction, and this model
+ * never applies.
+ */
+const enforcingRestriction = (response: ModelResponse, admitted: ReadonlySet<string>): ModelResponse => ({
+  ...response,
+  output: response.output.filter((item) => {
+    const type = item.type;
+    if (typeof type !== "string" || !toolCallTypes.has(type)) return true;
+    const name = Reflect.get(item as unknown as Record<string, unknown>, "name");
+    return (
+      (typeof name === "string" && (admitted.has(name) || admitted.has(`function:${name}`))) ||
+      admitted.has(type)
+    );
+  }),
+});
 
 const inputTexts = (content: unknown): string | undefined => {
   if (!Array.isArray(content)) return undefined;
@@ -223,26 +295,53 @@ const prewarmRequest = (request: ModelRequest): boolean => {
 /**
  * A model whose requests a Chat Completions endpoint accepts. A prewarm request needs no answer
  * from the provider, so it completes at once with no call and no tokens; any provider error of a
- * real call passes through as the failure it is.
+ * real call passes through as the failure it is. The wrapper keeps the wrapped model's
+ * prototype, so the SDK's capability machinery still sees a Chat Completions model and offers
+ * the plain-function filesystem and shell tools instead of the hosted, Responses-only ones.
+ * The `allowed_tools` restriction the cleaning turns into a filtered tool list is also enforced
+ * on what comes back — dropped calls and `response_done` events with them — because a Chat
+ * Completions endpoint does not enforce it itself and the runner resolves every returned call
+ * against every tool the agent carries. Raw provider stream chunks pass through untouched: the
+ * runner never executes from them, only from the completed response.
  */
-export const chatCompatibleModel = (model: Model): Model => ({
-  ...(model.supportsPromptModelSelection === undefined
-    ? {}
-    : { supportsPromptModelSelection: model.supportsPromptModelSelection }),
-  getResponse: (request: ModelRequest): Promise<ModelResponse> =>
-    prewarmRequest(request)
-      ? Promise.resolve({ usage: new Usage(), output: [] })
-      : model.getResponse(cleanChatCompletionsRequest(request)),
-  getStreamedResponse: (request: ModelRequest) =>
-    model.getStreamedResponse(cleanChatCompletionsRequest(request)),
-  ...(model.getRetryAdvice === undefined
-    ? {}
-    : {
-        getRetryAdvice: (
-          args: Parameters<NonNullable<Model["getRetryAdvice"]>>[0],
-        ) => model.getRetryAdvice?.(args),
-      }),
-});
+export const chatCompatibleModel = (model: Model): Model => {
+  const enforcing = (request: ModelRequest) => {
+    const restriction = toolRestrictionOf(request.modelSettings.providerData);
+    return restriction === undefined ? undefined : admittedToolNames(restriction.tools);
+  };
+  return modelWithOverrides(model, {
+    getResponse: (request: ModelRequest): Promise<ModelResponse> => {
+      if (prewarmRequest(request)) return Promise.resolve({ usage: new Usage(), output: [] });
+      const admitted = enforcing(request);
+      const answer = model.getResponse(cleanChatCompletionsRequest(request));
+      return admitted === undefined ? answer : answer.then((r) => enforcingRestriction(r, admitted));
+    },
+    getStreamedResponse: (request: ModelRequest) => {
+      const admitted = enforcing(request);
+      const stream = model.getStreamedResponse(cleanChatCompletionsRequest(request));
+      if (admitted === undefined) return stream;
+      return (async function* () {
+        for await (const event of stream) {
+          const type: unknown = Reflect.get(event as unknown as Record<string, unknown>, "type");
+          if (type !== "response_done") {
+            yield event;
+            continue;
+          }
+          const response: unknown = Reflect.get(event as unknown as Record<string, unknown>, "response");
+          if (typeof response !== "object" || response === null) {
+            yield event;
+            continue;
+          }
+          const enforced = enforcingRestriction(response as ModelResponse, admitted);
+          yield {
+            ...(event as unknown as Record<string, unknown>),
+            response: enforced,
+          } as unknown as typeof event;
+        }
+      })();
+    },
+  });
+};
 
 /**
  * The model providers for a custom endpoint: one per role, each sending its configured model ID

@@ -28,19 +28,33 @@ const chatCompletion = () =>
     { headers: { "content-type": "application/json" } },
   );
 
-/** Captures every request body the provider would send, answering each from `answer`. */
+/** Captures every request the provider would send, answering each from `answer`. */
 const wire = (answer: () => Response = chatCompletion) => {
   const bodies: Record<string, unknown>[] = [];
   const urls: string[] = [];
+  const headers: (Record<string, string> | undefined)[] = [];
   return {
     bodies,
     urls,
+    headers,
     fetch: async (url: RequestInfo | URL, init?: RequestInit) => {
       urls.push(String(url));
       bodies.push(JSON.parse(typeof init?.body === "string" ? init.body : "{}") as Record<
         string,
         unknown
       >);
+      const sent = init?.headers;
+      const authorization = (() => {
+        if (sent === undefined || sent === null) return undefined;
+        if (typeof (sent as { get?: unknown }).get === "function")
+          return (sent as Headers).get("Authorization") ?? undefined;
+        if (Array.isArray(sent))
+          return Object.fromEntries(sent.filter((entry): entry is [string, string] => Array.isArray(entry)))[
+            "Authorization"
+          ];
+        return (sent as Record<string, string>)["Authorization"];
+      })();
+      headers.push({ ...(authorization === undefined ? {} : { Authorization: authorization }) });
       return answer();
     },
   };
@@ -380,4 +394,164 @@ it("refuses to start a session whose provider configuration is invalid", async (
       ),
     ),
   ).rejects.toThrow("POMERADO_MODEL_API_KEY_ENV");
+});
+
+it("sends the endpoint key as the bearer credential and nowhere else", async () => {
+  const { headers, bodies, urls, fetch } = wire();
+  const providers = customModelProviders(configured({ minterModel: "vendor-minter" }), "synthetic-key", {
+    fetch: fetch as typeof fetch,
+  });
+  const model = await providers.minter.getModel(solModel);
+  await withTrace("custom providers", async () => {
+    await model.getResponse(request());
+  });
+  expect(headers[0]?.["Authorization"]).toBe("Bearer synthetic-key");
+  expect(JSON.stringify({ bodies, urls })).not.toContain("synthetic-key");
+});
+
+it("accepts an https base url and a loopback http one", () => {
+  expect(
+    modelProviderSetup({
+      POMERADO_MODEL_BASE_URL: "http://127.0.0.1:8080/v1",
+      POMERADO_MODEL_API_KEY_ENV: apiKeyEnv,
+      VENDOR_API_KEY: "synthetic",
+    }),
+  ).toMatchObject({ provider: "custom", config: { baseURL: "http://127.0.0.1:8080/v1" } });
+  expect(
+    modelProviderSetup({
+      POMERADO_MODEL_BASE_URL: "http://[::1]:9000/v1",
+      POMERADO_MODEL_API_KEY_ENV: apiKeyEnv,
+      VENDOR_API_KEY: "synthetic",
+    }),
+  ).toMatchObject({ provider: "custom" });
+  expect(
+    modelProviderSetup({
+      POMERADO_MODEL_BASE_URL: "http://localhost:8080/v1",
+      POMERADO_MODEL_API_KEY_ENV: apiKeyEnv,
+      VENDOR_API_KEY: "synthetic",
+    }),
+  ).toMatchObject({ provider: "custom" });
+});
+
+it("rejects a base url that is not https and not loopback, without sending anything", () => {
+  for (const bad of ["http://vendor.example.test/v1", "http://192.168.1.5/v1", "ftp://localhost/v1", "vendor.example.test"])
+    expect(modelProviderSetup({
+      POMERADO_MODEL_BASE_URL: bad,
+      POMERADO_MODEL_API_KEY_ENV: apiKeyEnv,
+      VENDOR_API_KEY: "synthetic",
+    })).toMatchObject({ provider: "invalid", reason: expect.stringContaining("https") });
+});
+
+/** A completion whose assistant message calls two tools at once. */
+const toolCallCompletion = () =>
+  new Response(
+    JSON.stringify({
+      id: "chatcmpl_calls",
+      object: "chat.completion",
+      created: 1,
+      model: "vendor-model",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              { id: "call_disallowed", type: "function", function: { name: "finish_build", arguments: "{}" } },
+              { id: "call_allowed", type: "function", function: { name: "read_source", arguments: "{}" } },
+            ],
+          },
+          finish_reason: "tool_calls",
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    }),
+    { headers: { "content-type": "application/json" } },
+  );
+
+/** A request restricted to `read_source`, as the minter's layout writes the restriction. */
+const restrictedToReadSource = (tools: ReturnType<typeof tool>[]): ModelRequest =>
+  request({
+    tools,
+    modelSettings: {
+      providerData: {
+        tool_choice: {
+          type: "allowed_tools",
+          mode: "auto",
+          tools: [{ type: "function", name: "read_source" }],
+        },
+      },
+    },
+  });
+
+it("drops a returned call the restriction does not admit, keeping the admitted one", async () => {
+  const { fetch } = wire(toolCallCompletion);
+  const providers = customModelProviders(configured({ minterModel: "vendor-minter" }), "synthetic", {
+    fetch: fetch as typeof fetch,
+  });
+  const model = await providers.minter.getModel(solModel);
+  const response = await withTrace("custom providers", async () =>
+    model.getResponse(restrictedToReadSource([tool("read_source"), tool("finish_build")])),
+  );
+  expect(
+    response.output.flatMap((item) => (item.type === "function_call" ? [item.name] : [])),
+  ).toEqual(["read_source"]);
+  expect(response.usage.totalTokens).toBe(2);
+});
+
+it("drops a streamed call the restriction does not admit, keeping text and admitted calls", async () => {
+  const chunk = (delta: Record<string, unknown>, finishReason: string | null = null) =>
+    `data: ${JSON.stringify({
+      id: "chatcmpl_stream",
+      object: "chat.completion.chunk",
+      created: 1,
+      model: "vendor-model",
+      choices: [{ index: 0, delta, finish_reason: finishReason }],
+    })}\n\n`;
+  const sse = [
+    chunk({ role: "assistant", content: "" }),
+    chunk({
+      tool_calls: [
+        { index: 0, id: "call_disallowed", type: "function", function: { name: "finish_build", arguments: "{}" } },
+      ],
+    }),
+    chunk({
+      tool_calls: [
+        { index: 1, id: "call_allowed", type: "function", function: { name: "read_source", arguments: "{}" } },
+      ],
+    }),
+    chunk({ content: "Working." }),
+    chunk({}, "tool_calls"),
+    "data: [DONE]\n\n",
+  ].join("");
+  const { fetch } = wire(
+    () => new Response(new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        controller.enqueue(new TextEncoder().encode(sse));
+        controller.close();
+      },
+    }), { headers: { "content-type": "text/event-stream" } }),
+  );
+  const providers = customModelProviders(configured({ minterModel: "vendor-minter" }), "synthetic", {
+    fetch: fetch as typeof fetch,
+  });
+  const model = await providers.minter.getModel(solModel);
+  const events = await withTrace("custom providers", async () => {
+    const collected: unknown[] = [];
+    for await (const event of model.getStreamedResponse(
+      restrictedToReadSource([tool("read_source"), tool("finish_build")]),
+    ))
+      collected.push(event);
+    return collected;
+  });
+  const done = events.find(
+    (event): event is { type: string; response: ModelResponse } =>
+      typeof event === "object" && event !== null && Reflect.get(event, "type") === "response_done",
+  );
+  expect(
+    done?.response.output.flatMap((item) => (item.type === "function_call" ? [item.name] : [])),
+  ).toEqual(["read_source"]);
+  expect(JSON.stringify(events.find((event) => Reflect.get(event as object, "type") === "output_text_delta"))).toContain(
+    "Working.",
+  );
 });

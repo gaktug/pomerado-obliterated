@@ -22,6 +22,7 @@ import {
   mintIdleCompactionTokens,
 } from "./idle-compaction.js";
 import { solModel } from "../models/models.js";
+import { modelWithOverrides } from "../models/model-wrap.js";
 import { providerQuotaExhausted } from "../models/provider-quota.js";
 import { transientTransportFailure } from "../models/transport-failure.js";
 import { MaxTurnsExceededError, RunContext, RunState, Runner, Usage, tool } from "@openai/agents";
@@ -1416,18 +1417,23 @@ const openAIMinter = (
             const cacheLayout: ModelProvider = {
               getModel: async (name) => {
                 const model = await sdkProvider.getModel(name);
-                return {
+                // The wrapper keeps the model's prototype: the SDK's capability machinery reads
+                // the model instance's constructor to choose between the hosted, Responses-only
+                // sandbox tools and the plain-function ones, so a plain object here would hand a
+                // Chat Completions provider hosted tools its endpoint refuses.
+                return modelWithOverrides(model, {
                   getResponse: (request) => model.getResponse(layout(request)),
                   getStreamedResponse: (request) => model.getStreamedResponse(layout(request)),
-                };
+                });
               },
             };
             const provider = diagnostics?.provider(cacheLayout) ?? cacheLayout;
             runner.config.modelProvider = {
               getModel: async (name) => {
                 const model = await provider.getModel(name);
-                return {
-                  ...model,
+                // Keeps this model's prototype too, for the same reason as the layout wrapper:
+                // the SDK reads the constructor to pick the sandbox tool transports.
+                return modelWithOverrides(model, {
                   getResponse: async (request) => {
                     // The SDK model opens its span in the runner's AsyncLocalStorage trace
                     // context and throws without one. An Effect fiber resumes in the async
@@ -1550,7 +1556,7 @@ const openAIMinter = (
                       ),
                     ).then(noteCalls);
                   },
-                };
+                });
               },
             };
             diagnostics?.attach(runner);
