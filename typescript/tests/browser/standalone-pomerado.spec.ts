@@ -593,7 +593,7 @@ test("terminal CLI help requires no provider credentials", async () => {
   const closed: readonly unknown[] = await once(child, "close");
   const code = closed[0];
   expect(code, errors).toBe(0);
-  expect(output).toContain("pomerado mint --url URL");
+  expect(output).toContain("pomerado-obliterated mint --url URL");
   expect(output).toContain("A run ignores --intent and --effect.");
 });
 

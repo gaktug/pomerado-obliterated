@@ -11,10 +11,10 @@ import type { PomeradoOptions } from "./contracts.js";
 import { RunOutcomeFailure } from "./run-report.js";
 import { makeTerminalAsker } from "../inputs/terminal.js";
 
-const usage = `Pomerado
+const usage = `Pomerado Obliterated
 
-  pomerado mint --url URL --intent TEXT --out DIRECTORY [--input JSON]
-  pomerado run --artifact DIRECTORY --url URL [--input JSON]
+  pomerado-obliterated mint --url URL --intent TEXT --out DIRECTORY [--input JSON]
+  pomerado-obliterated run --artifact DIRECTORY --url URL [--input JSON]
 
 Options
   --endpoint URL          Attach to a native Playwright websocket endpoint

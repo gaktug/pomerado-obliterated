@@ -331,14 +331,14 @@ The package also works as a library. A library session can mint and run while it
 
 ```js
 import { Effect } from "effect";
-import { createPomerado, makeTerminalAsker } from "pomerado";
+import { createPomerado, makeTerminalAsker } from "pomerado-obliterated";
 
 await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
       const session = yield* createPomerado({ ask: makeTerminalAsker() });
       const request = {
-        url: "https://example.com",
+        url: "https://www.iana.org/domains/reserved",
         intent: "Read the main heading",
         input: {},
         effect: "read",
@@ -358,7 +358,7 @@ await Effect.runPromise(
 
 The package has these entry points.
 
-- `pomerado`, `pomerado/runtime` and `pomerado/mcp` serve local sessions, the authored browser runtime and local MCP composition.
+- This fork's package is `pomerado-obliterated`; its exported subpaths include `pomerado-obliterated/runtime` and `pomerado-obliterated/mcp`. Internal authored-operation staging retains the upstream `pomerado/runtime` alias for compatibility. In the technical descriptions below, replace `pomerado/*` with `pomerado-obliterated/*` for imports from this installed fork; keep `pomerado/runtime` only inside an authored operation's staged workspace.
 - `pomerado/runtime` only adds exports. A release never removes or renames one, because published tools import it, and a tool may run on a later release than the one that minted it.
 - Explicit `pomerado/core/*` subpaths, such as `pomerado/core/mint/harness`, `pomerado/core/guardian/review` and `pomerado/core/runtime/host-execute`, let other hosts compose the library. The export map lists the supported modules.
 - `pomerado/testing/*` holds reusable test helpers and fixtures. Vitest is an optional peer for helpers that need it.
@@ -385,7 +385,7 @@ The package has these entry points.
 - `lintOutput` from `pomerado/core/runtime/output-lint` is the one output check every host uses: after a run, at publication and on hosted runs. `outputNotes` from `pomerado/core/mint/output-notes` applies it at publication with the minter's overrides, returns what still blocks and writes `publication/output-notes.json` for the publication review. Advisory `duplicate_entries` also flags an item ID, SKU or link field that repeats within one list. `empty_field` also takes `alsoTested`, the `fieldFill` of the tool's other tested runs, as paths and counts with no value: a field empty in every record of the run and of those runs, at least one of which holds it, is flagged, outside a list even in one record; with no other tested run only the per-list check runs. The harness passes each live test case the other cases' fills on the same source, and gives `publish` every case's fill as `hostEvidence.testedFields`, which the local host passes to `outputNotes`. `lintSchemas` adds advisory checks of the declared schemas there, `loose_text` and `looser_than_input`, which never block. Two advisory checks name a value in another notation than its field promises: `format_mismatch`, a field that declares `format: "date"` holding anything but `YYYY-MM-DD`, or `format: "date-time"` anything but ISO 8601 with an offset, and `case_variant`, one short value written in two letter cases across a list's records, such as `paid` and `Paid`.
 - `pomerado/testing/confirm-popups-contract` holds a fixture page with eight confirm cases and `confirmPopupContractFailures`, which checks a host's run dialog handling against them.
 
-`npx -y -p pomerado pomerado --help` shows the terminal interface for minting and running. Terminal mint keeps its original source-artifact format. Use `pomerado-mcp mint` for generated MCP packaging.
+After installing this fork from GitHub as in [Getting started](getting-started.md), `pomerado-obliterated --help` shows the terminal interface for minting and running. Terminal mint keeps its original source-artifact format. Use `pomerado-obliterated-mcp mint` for generated MCP packaging.
 
 ## Other hosts
 

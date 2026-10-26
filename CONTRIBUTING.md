@@ -1,14 +1,14 @@
-# Contributing to Pomerado
+# Contributing to Pomerado Obliterated
 
-We welcome bug reports, documentation improvements and code contributions. Start by opening a [GitHub issue](https://github.com/Pomerado/pomerado/issues/new). Discuss larger changes before you start building them.
+This is an independent fork. Open fork issues and pull requests at [gaktug/pomerado-obliterated](https://github.com/gaktug/pomerado-obliterated/issues/new); upstream Pomerado has its own maintainers.
 
 Pomerado is agent friendly. Point your coding agent at [AGENTS.md](AGENTS.md), which has the setup, the layout and the rules it should follow. You answer for its changes as if you wrote them.
 
-Please follow our [code of conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately with **Report a vulnerability** on the [Security tab](https://github.com/Pomerado/pomerado/security), never in a public issue.
+Follow the upstream [code of conduct](CODE_OF_CONDUCT.md). For a vulnerability in this fork, use this fork's GitHub private vulnerability reporting when enabled; do not disclose secrets in a public issue. The upstream security route is only for upstream vulnerabilities.
 
 ## Set up the repository
 
-To use Pomerado with your agent, start with [Get started](README.md#get-started). To develop this repository, install these.
+To use the fork with your agent, start with [Getting started](docs/getting-started.md). To develop this repository, install these.
 
 - macOS or Linux.
 - Node 24.21 or a later Node 24 release.
@@ -18,24 +18,24 @@ To use Pomerado with your agent, start with [Get started](README.md#get-started)
 Fork the repository, then clone your fork and install its dependencies.
 
 ```sh
-git clone https://github.com/YOUR_USERNAME/pomerado.git
-cd pomerado
+git clone https://github.com/gaktug/pomerado-obliterated.git
+cd pomerado-obliterated
 corepack enable
 corepack pnpm install --frozen-lockfile
 corepack pnpm exec playwright install chromium
 corepack pnpm build
 ```
 
-On Linux, add `--with-deps` after `install` if Chromium's system libraries are missing.
+On Linux, add `--with-deps` after `install` if Chromium's system libraries are missing. For users without Corepack, `npm install && npm run build` is an alternative; the Git-package `prepack` uses npm.
 
-To try your build in an MCP client, point the client at the built entry with Node. Use absolute paths. `node -p 'process.execPath'` prints the Node path, and the server needs `OPENAI_API_KEY` in its environment to mint.
+To try your build in an MCP client, point the client at the built entry with Node. Use absolute paths. `node -p 'process.execPath'` prints the Node path, and the server needs your configured provider variables in its environment to mint ([details](docs/getting-started.md#another-model-provider)).
 
 ```json
 {
   "mcpServers": {
-    "pomerado": {
+    "pomerado-obliterated": {
       "command": "/absolute/path/to/node",
-      "args": ["/absolute/path/to/pomerado/dist/typescript/src/standalone/mcp-cli.js", "mint", "--root", "/absolute/path/to/integrations"]
+      "args": ["/absolute/path/to/pomerado-obliterated/dist/typescript/src/standalone/mcp-cli.js", "mint", "--root", "/absolute/path/to/integrations"]
     }
   }
 }
@@ -43,7 +43,7 @@ To try your build in an MCP client, point the client at the built entry with Nod
 
 ## Find your way around
 
-The [repository guide](README.md#repository-guide) maps the top-level folders. [How it works](docs/how-it-works.md#source-layout) lists each module under `typescript/src/`.
+[How it works](docs/how-it-works.md#source-layout) lists each module under `typescript/src/`.
 
 ## Make a change
 

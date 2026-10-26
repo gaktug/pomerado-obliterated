@@ -11,10 +11,10 @@ import { prepareIntegration } from "./mcp-package.js";
 import { makeIntegrationMcp, makePomeradoMcp } from "./mcp-server.js";
 import type { PomeradoOptions } from "./contracts.js";
 
-const usage = `Pomerado MCP
+const usage = `Pomerado Obliterated MCP
 
-  pomerado-mcp mint [--root DIRECTORY]
-  pomerado-mcp serve --artifact DIRECTORY
+  pomerado-obliterated-mcp mint [--root DIRECTORY]
+  pomerado-obliterated-mcp serve --artifact DIRECTORY
 
 Options
   --endpoint URL     Attach to native Playwright

@@ -1,16 +1,16 @@
 {
-  "name": "pomerado",
+  "name": "pomerado-obliterated",
   "version": "0.4.0",
-  "description": "Pomerado's integration minter and Guardian with local compute and native Playwright",
+  "description": "Model-agnostic website-to-agent-tool integration minter, forked from Pomerado",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://pomerado.ai",
+  "homepage": "https://github.com/gaktug/pomerado-obliterated#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Pomerado/pomerado.git"
+    "url": "git+https://github.com/gaktug/pomerado-obliterated.git"
   },
   "bugs": {
-    "url": "https://github.com/Pomerado/pomerado/issues"
+    "url": "https://github.com/gaktug/pomerado-obliterated/issues"
   },
   "packageManager": "pnpm@10.34.5",
   "engines": {
@@ -20,8 +20,8 @@
     "hostProtocol": 1
   },
   "bin": {
-    "pomerado": "dist/typescript/src/standalone/cli.js",
-    "pomerado-mcp": "dist/typescript/src/standalone/mcp-cli.js"
+    "pomerado-obliterated": "dist/typescript/src/standalone/cli.js",
+    "pomerado-obliterated-mcp": "dist/typescript/src/standalone/mcp-cli.js"
   },
   "exports": {
     ".": {
@@ -1024,7 +1024,7 @@
     "mcp": "node dist/typescript/src/standalone/mcp-cli.js",
     "test": "node tools/check-host-protocol.ts && vitest run",
     "test:browser": "playwright test",
-    "prepack": "corepack pnpm build"
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
@@ -1048,6 +1048,7 @@
     "vitest": "5.0.5"
   },
   "peerDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
     "@openai/agents": "0.18.0",
     "effect": "3.22.2",
     "patchright": "1.63.0",

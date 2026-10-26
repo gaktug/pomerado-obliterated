@@ -125,29 +125,29 @@ jobs:
           import assert from "node:assert/strict";
           import { readFileSync } from "node:fs";
           import { createRequire } from "node:module";
-          import * as runtime from "pomerado/runtime";
-          import * as errors from "pomerado/core/runtime/errors";
-          import { getAuthoringDirectory, getGuardianPolicyPath } from "pomerado/assets";
+          import * as runtime from "pomerado-obliterated/runtime";
+          import * as errors from "pomerado-obliterated/core/runtime/errors";
+          import { getAuthoringDirectory, getGuardianPolicyPath } from "pomerado-obliterated/assets";
           const require = createRequire(import.meta.url);
-          const manifest = require("pomerado/package.json");
-          const packageRequire = createRequire(require.resolve("pomerado/package.json"));
+          const manifest = require("pomerado-obliterated/package.json");
+          const packageRequire = createRequire(require.resolve("pomerado-obliterated/package.json"));
           for (const dependency of ["effect", "@openai/agents"]) {
             assert.equal(packageRequire.resolve(dependency), require.resolve(dependency));
           }
           for (const key of Object.keys(manifest.exports).filter((key) => key.startsWith("./core/"))) {
-            await import(`pomerado/${key.slice(2)}`);
+            await import(`pomerado-obliterated/${key.slice(2)}`);
           }
           assert.equal(runtime.BrowserFailure, errors.BrowserFailure);
           assert.ok(readFileSync(getGuardianPolicyPath(), "utf8").includes("{{ tenant_policy_config }}"));
           assert.ok(readFileSync(`${getAuthoringDirectory()}/workspace/AGENTS.md`, "utf8").length > 0);
           JS
           cat > consumer.mts <<'TS'
-          import { MintServices } from "pomerado/core/mint/contracts";
-          import type { MintDependencies } from "pomerado/core/mint/contracts";
-          import { runMint } from "pomerado/core/mint/harness";
-          import type { HostExecute } from "pomerado/core/runtime/host-execute";
-          import { getAuthoringDirectory } from "pomerado/assets";
-          import { expectFailure } from "pomerado/testing/expect-failure";
+          import { MintServices } from "pomerado-obliterated/core/mint/contracts";
+          import type { MintDependencies } from "pomerado-obliterated/core/mint/contracts";
+          import { runMint } from "pomerado-obliterated/core/mint/harness";
+          import type { HostExecute } from "pomerado-obliterated/core/runtime/host-execute";
+          import { getAuthoringDirectory } from "pomerado-obliterated/assets";
+          import { expectFailure } from "pomerado-obliterated/testing/expect-failure";
           declare const dependencies: MintDependencies;
           declare const execute: HostExecute;
           MintServices.of(dependencies);
@@ -159,7 +159,7 @@ jobs:
           "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --strict --skipLibCheck --target ES2024 --module NodeNext --moduleResolution NodeNext consumer.mts
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pomerado-package
+          name: pomerado-obliterated-package
           path: ${{ runner.temp }}/pomerado-artifact/*.tgz
   # The browser tests, split by test across parallel shards. fullyParallel in playwright.config.ts
   # lets Playwright give each shard an equal number of tests. Each shard builds dist/ itself, since

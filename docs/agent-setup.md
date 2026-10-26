@@ -1,111 +1,58 @@
-# Set up Pomerado for your user
+# Set up Pomerado Obliterated for a user
 
-These steps are for an AI agent that installs Pomerado for the person it works with. Pomerado is a local MCP server that builds MCP integrations for websites. Follow the steps in order, and stop where a step says to ask.
+This guide is for an agent asked to install the [gaktug/Pomerado Obliterated fork](https://github.com/gaktug/pomerado-obliterated). Do **not** substitute the upstream npm `pomerado` package. Ask before changing the user's Node installation, global packages, MCP client settings or sudo-managed browser libraries. Never ask for an API key, password or one-time code in ordinary chat; let the user configure secrets through their client's private mechanism. Report exactly what you verified.
 
-Follow these rules throughout.
+## 1. Check prerequisites
 
-- Never ask for the user's OpenAI API key in chat.
-- Never read, print, echo, test or log the key, and never write its value into a file.
-- Ask before you install software the user didn't mention, such as Node.
-- Ask before you change user-level or global configuration the user didn't mention.
-- Tell the user what you changed when you finish.
+- Linux or macOS; Node 24.21+ and below 25, npm and Git.
+- An MCP client that starts a local stdio server.
+- A provider endpoint and model IDs the user wants. For GLM-5.3 via Z.ai Coding Plan, use the known settings below. Do not promise another model can finish a mint just because its endpoint accepts tool calls.
 
-## 1. Check the platform and Node
+If Node is outside that range, stop and ask how the user wants to install/switch Node. The fork does not support the default Node 26 found on some newer systems.
 
-```sh
-uname -s
-node --version
-```
+## 2. Install this fork and Chromium
 
-- Continue on macOS, where `uname -s` prints `Darwin`, or on Linux.
-- Stop on any other platform. Tell the user Pomerado supports macOS and Linux.
-- Continue if Node prints `v24.21.0` or a later `v24` release.
-- Otherwise stop and ask. Tell the user Pomerado needs Node 24.21 or a later Node 24 release, and ask how they want to install it. Don't install or switch Node without their answer.
-
-## 2. Install Pomerado and Chromium
+With authorization for user-level/global installation:
 
 ```sh
-npx -y -p pomerado pomerado-mcp --help
-npx -y -p pomerado playwright install chromium
+npm install -g 'git+https://github.com/gaktug/pomerado-obliterated.git#main'
+npx -y -p playwright@1.63.0 playwright install chromium
+pomerado-obliterated-mcp --help
+command -v pomerado-obliterated-mcp
 ```
 
-- The first command must print `Pomerado MCP` and its usage. If it prints nothing, npm's cache holds a version older than 0.2.0. Run it again with `pomerado@latest` in place of `pomerado`, and use that spelling in every later step.
-- The second command installs the Chromium build Pomerado expects. Playwright may warn about project dependencies. The browser installs anyway.
-- On Linux, Chromium may need system libraries. Ask the user before you run `npx -y -p pomerado playwright install --with-deps chromium`, because it uses `sudo`.
+Pin `#main` to a tested commit SHA for reproducible installs. The Git install builds the package; the upstream npm package is never involved. If Chromium needs Linux libraries, ask before `npx -y -p playwright@1.63.0 playwright install --with-deps chromium` because it needs sudo. A network-blocked browser download is a blocker, not a pass.
 
-## 3. Choose the folder and the scope
+## 3. Choose provider and integration folder
 
-- Ask where Pomerado should save integrations, unless the user said. Suggest `~/pomerado-integrations`. Use the absolute path from here on.
-- Ask whether Pomerado should be available in every project or only the current one, unless the user said.
+Ask where integrations should be saved (suggest an absolute path under the user's home), and which provider to use if not specified. Do not put a key value in the repo or a shared config. Configure **variable names and model IDs** for Z.ai Coding Plan:
 
-## 4. Add the server to your client
-
-Use the section for the client you run in. Ask the user if you aren't sure which client that is. [Client settings](getting-started.md#client-settings) has the details and the source for each client.
-
-### Claude Code
-
-```sh
-claude mcp add --scope user pomerado -- npx -y -p pomerado pomerado-mcp mint --root /absolute/path/to/pomerado-integrations
+```text
+POMERADO_MODEL_BASE_URL=https://api.z.ai/api/coding/paas/v4
+POMERADO_MODEL_API_KEY_ENV=GLM_API_KEY
+POMERADO_MODEL_PROTOCOL=chat_completions
+POMERADO_MINTER_MODEL=GLM-5.3
+POMERADO_GUARDIAN_MODEL=GLM-5.3
+POMERADO_OUTCOME_REVIEWER_MODEL=GLM-5.3
 ```
 
-- `--scope user` adds Pomerado for every project. `--scope project` writes `.mcp.json` in the current project instead.
-- Claude Code asks the user to approve a project server before it starts it.
-- Claude Code passes its own environment to the server, so the key needs no config line.
+The user places `GLM_API_KEY` into their client's private environment. Other providers need their own URL, key-variable **name** and three model IDs. With no custom base URL the upstream OpenAI default requires `OPENAI_API_KEY` and access to its configured models. [Getting started](getting-started.md#another-model-provider) has the options.
 
-### Codex
+## 4. Connect and verify
 
-```sh
-codex mcp add pomerado -- npx -y -p pomerado pomerado-mcp mint --root /absolute/path/to/pomerado-integrations
-```
-
-- Ask the user before you run it. `codex mcp add` writes the global `~/.codex/config.toml`, or `$CODEX_HOME/config.toml`, so the server appears in every project.
-- For one project only, add the same section to `.codex/config.toml` in that project instead. Codex reads it only in a trusted project.
-- Then add `env_vars = ["OPENAI_API_KEY"]` and `startup_timeout_sec = 60` to the `[mcp_servers.pomerado]` section. These lines name the variable and hold no key.
-
-### Gemini CLI
-
-```sh
-gemini mcp add -s user -e 'OPENAI_API_KEY=$OPENAI_API_KEY' pomerado npx -y -p pomerado pomerado-mcp mint --root /absolute/path/to/pomerado-integrations
-```
-
-- `-s user` adds Pomerado for every project. `-s project` adds it to the current project instead.
-- Keep the single quotes. The settings file then stores a reference to the variable and not the key.
-
-### Cursor, VS Code and Claude Desktop
-
-Add this entry to the client's `mcpServers` file, in the place [Client settings](getting-started.md#client-settings) names for that client.
+Use `command -v pomerado-obliterated-mcp` to get the installed executable's **absolute path**. Add it to the user's MCP client with `mint --root /absolute/path/to/integrations`. Set at least a 60-second tool-call timeout and forward every provider setting **and the key variable** using the client's documented environment mechanism. For example, a generic `mcpServers` entry is:
 
 ```json
 {
   "mcpServers": {
-    "pomerado": {
-      "command": "npx",
-      "args": ["-y", "-p", "pomerado", "pomerado-mcp", "mint", "--root", "/absolute/path/to/pomerado-integrations"]
+    "pomerado-obliterated": {
+      "command": "/absolute/path/to/pomerado-obliterated-mcp",
+      "args": ["mint", "--root", "/absolute/path/to/integrations"]
     }
   }
 }
 ```
 
-## 5. Ask the user to provide the key
+Client-specific commands and environment caveats are in [Getting started](getting-started.md#connect-an-mcp-client). Reload the client; verify `mint`, `get_job`, `provide_input` and `cancel_job` are visible. Listing tools incurs no model cost. An actual mint should be done only after the user approves the site/task and paid provider calls. For a read-only smoke, use https://www.iana.org/domains/reserved and its H1; do **not** use example.com, which may have no H1. Follow the one returned job ID with `get_job` until it reports `build: published`, then run its generated integration separately and check the output. A write mint can act on a live site during construction: do not use one for a smoke test.
 
-- Tell the user the server needs `OPENAI_API_KEY` in its environment, and that Pomerado calls OpenAI models to build and review integrations.
-- Ask the user to set the key themselves, in their shell profile or the client's own key setting. Point them to their client in [Client settings](getting-started.md#client-settings).
-- Tell the user not to paste the key into chat.
-- Claude Desktop documents no way to reference a variable. Tell the user the key would sit as plain text in the entry's `env` block. If they accept that, they add the key to the `env` block themselves.
-
-## 6. Verify
-
-- Run your client's list command, such as `claude mcp list` or `gemini mcp list`. It should show `pomerado` as connected. `codex mcp list` shows only the configuration.
-- Most clients load a new server in a new session. Ask the user to restart or reload the client if you can't see Pomerado's tools yet.
-- Check that you have the four tools `mint`, `get_job`, `provide_input` and `cancel_job`. Listing them needs no key and launches no browser.
-
-## 7. Suggest a first integration
-
-Suggest this prompt, and wait for the user to agree before you run it. Minting calls paid models on the user's OpenAI account.
-
-> Use Pomerado to create an integration named example_reader that reads the main heading from https://example.com. Keep it read-only.
-
-- Choose `read` authority unless the user asks for a change on the website.
-- Follow the job with `get_job` until it finishes. Never call `mint` again for the same job.
-- Before you collect a password or code, tell the user that answers sent through `provide_input` are visible to the MCP client and its model provider.
-- When the mint finishes, open the integration's `README.md` and add the integration with the command for your client, after asking the user. The integration needs no model key, so leave out `env_vars`, the Gemini `-e` flag and step 5.
+An installed executable, visible tools, a published build and a separate run are distinct acceptance gates. Report which passed and which remain untested.
